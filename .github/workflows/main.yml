@@ -1,0 +1,54 @@
+name: Linux Mint RDP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  rdp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y linuxmint-keyring
+          sudo apt install -y mint-xfce-desktop
+
+      - name: Set up RDP server
+        run: |
+          sudo apt install -y xrdp
+          sudo systemctl enable xrdp
+          sudo systemctl start xrdp
+
+      - name: Install ngrok
+        run: |
+          curl -s https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip > ngrok.zip
+          unzip ngrok.zip
+          sudo mv ngrok /usr/local/bin/
+
+      - name: Set up ngrok authtoken
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+        run: |
+          ngrok authtoken $NGROK_AUTHTOKEN
+
+      - name: Start ngrok
+        run: |
+          ngrok tcp 3389 &
+
+      - name: Wait for RDP server to be ready
+        run: |
+          sleep 30
+
+      - name: Print RDP connection details
+        run: |
+          echo "RDP connection details:"
+          echo "-----------------------"
+          echo "Username: mint"
+          echo "Password: mint"
+          echo "Address: $(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url' | cut -d ':' -f2-)"
+          echo "-----------------------"
