@@ -1,0 +1,52 @@
+name: Windows 11 RDP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          choco install -y windows-remote-desktop
+
+      - name: Set up RDP server
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
+          Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name 'UserAuthentication' -Value 1
+
+      - name: Install ngrok
+        run: |
+          Invoke-WebRequest -Uri 'https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-windows-amd64.zip' -OutFile 'ngrok.zip'
+          Expand-Archive -Path 'ngrok.zip' -DestinationPath 'C:\ngrok'
+          $env:PATH += ';C:\ngrok'
+
+      - name: Set up ngrok authtoken
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+        run: |
+          ngrok authtoken $NGROK_AUTHTOKEN
+
+      - name: Start ngrok
+        run: |
+          ngrok tcp 3389 &
+
+      - name: Wait for RDP server to be ready
+        run: |
+          sleep 30
+
+      - name: Print RDP connection details
+        run: |
+          echo "RDP connection details:"
+          echo "-----------------------"
+          echo "Username: runneradmin"
+          echo "Password: ${{ secrets.RDP_PASSWORD }}"
+          echo "Address: $(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url' | cut -d ':' -f2-)"
+          echo "-----------------------"
